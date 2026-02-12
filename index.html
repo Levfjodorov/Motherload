@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Motherload — браузерная версия</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="layout">
+    <section class="hud">
+      <h1>Motherload</h1>
+      <div class="stats">
+        <div><span>💰 Деньги:</span> <strong id="money">0</strong></div>
+        <div><span>⛽ Топливо:</span> <strong id="fuel">0</strong></div>
+        <div><span>🧱 Груз:</span> <strong id="cargo">0</strong>/<strong id="cargoCapacity">0</strong></div>
+        <div><span>⬇️ Глубина:</span> <strong id="depth">0</strong> м</div>
+        <div><span>⚡ Скорость бурения:</span> <strong id="drill">1</strong></div>
+      </div>
+      <div class="help">
+        <p><strong>Управление:</strong> ← → ↑ ↓ или WASD</p>
+        <p>На поверхности топливо пополняется и груз продается автоматически.</p>
+        <p><strong>Магазин:</strong> клавиши 1/2/3 на поверхности:</p>
+        <ul>
+          <li>1 — увеличить бак (+40) за <span id="fuelUpgradeCost">120</span></li>
+          <li>2 — увеличить груз (+3) за <span id="cargoUpgradeCost">150</span></li>
+          <li>3 — ускорить бур (+1) за <span id="drillUpgradeCost">220</span></li>
+        </ul>
+      </div>
+      <p id="message" class="message"></p>
+    </section>
+
+    <section class="game">
+      <canvas id="gameCanvas" width="900" height="600"></canvas>
+    </section>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
