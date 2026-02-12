@@ -417,20 +417,22 @@ function drawMiner() {
   const px = player.x;
   const py = player.y - cameraY;
 
+  const halfW = player.w / 2;
+
   // main brass body
-  const bodyGrad = ctx.createLinearGradient(px - 14, py, px + 14, py);
+  const bodyGrad = ctx.createLinearGradient(px - halfW - 2, py, px + halfW + 2, py);
   bodyGrad.addColorStop(0, '#8f5a20');
   bodyGrad.addColorStop(0.5, '#d29a49');
   bodyGrad.addColorStop(1, '#6d4318');
   ctx.fillStyle = bodyGrad;
-  ctx.fillRect(px - 13, py - 10, 26, 20);
+  ctx.fillRect(px - halfW - 1, py - player.h / 2 - 1, player.w + 2, player.h + 2);
 
   // top copper boiler
   const boilerGrad = ctx.createLinearGradient(px, py - 16, px, py - 6);
   boilerGrad.addColorStop(0, '#d3844c');
   boilerGrad.addColorStop(1, '#864722');
   ctx.fillStyle = boilerGrad;
-  ctx.fillRect(px - 7, py - 16, 14, 8);
+  ctx.fillRect(px - halfW / 1.7, py - player.h / 2 - 7, halfW * 1.2, 8);
 
   // boiler cap
   ctx.fillStyle = '#4b2f18';
@@ -497,7 +499,7 @@ function drawMiner() {
   lamp.addColorStop(1, '#ffbf3f');
   ctx.fillStyle = lamp;
   ctx.beginPath();
-  ctx.arc(px + 13, py - 8, 4.5, 0, Math.PI * 2);
+  ctx.arc(px + halfW + 1, py - 8, 4.5, 0, Math.PI * 2);
   ctx.fill();
 
   // shadow
