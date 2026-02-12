@@ -21,13 +21,13 @@ const SURFACE_ROW = 4;
 const CAMERA_PADDING = 200;
 
 const ORE_TABLE = [
-  { from: 6, chance: 0.1, id: 'coal', color: '#3b3b3b', value: 20, hardness: 1 },
-  { from: 12, chance: 0.08, id: 'copper', color: '#cd7f32', value: 35, hardness: 1 },
-  { from: 20, chance: 0.07, id: 'silver', color: '#cfd8dc', value: 55, hardness: 2 },
-  { from: 35, chance: 0.06, id: 'gold', color: '#ffd54f', value: 90, hardness: 2 },
-  { from: 50, chance: 0.05, id: 'ruby', color: '#ef476f', value: 150, hardness: 3 },
-  { from: 70, chance: 0.045, id: 'emerald', color: '#06d6a0', value: 230, hardness: 4 },
-  { from: 90, chance: 0.035, id: 'diamond', color: '#8ecae6', value: 380, hardness: 5 },
+  { from: 6, chance: 0.1, id: 'coal', color: '#4e4e4e', value: 20, hardness: 1 },
+  { from: 12, chance: 0.08, id: 'copper', color: '#c78043', value: 35, hardness: 1 },
+  { from: 20, chance: 0.07, id: 'silver', color: '#dce3ea', value: 55, hardness: 2 },
+  { from: 35, chance: 0.06, id: 'gold', color: '#ffd75b', value: 90, hardness: 2 },
+  { from: 50, chance: 0.05, id: 'ruby', color: '#f54f78', value: 150, hardness: 3 },
+  { from: 70, chance: 0.045, id: 'emerald', color: '#15d8ab', value: 230, hardness: 4 },
+  { from: 90, chance: 0.035, id: 'diamond', color: '#9fd9ff', value: 380, hardness: 5 },
 ];
 
 const player = {
@@ -52,10 +52,12 @@ const upgradeCosts = {
 
 const controls = { left: false, right: false, up: false, down: false };
 const miningProgress = new Map();
+const particles = [];
 
 let cameraY = 0;
 let gameOver = false;
 let messageTimer = 0;
+let frameCounter = 0;
 
 const world = generateWorld();
 
@@ -72,7 +74,7 @@ function generateWorld() {
           row.push({ type: 'ore', ...ore });
         } else {
           const hardness = y > 90 ? 4 : y > 60 ? 3 : y > 30 ? 2 : 1;
-          row.push({ type: 'rock', color: `hsl(34 18% ${25 - Math.min(14, Math.floor(y / 8))}%)`, hardness, value: 0 });
+          row.push({ type: 'rock', color: `hsl(30 22% ${24 - Math.min(13, Math.floor(y / 8))}%)`, hardness, value: 0 });
         }
       }
     }
@@ -87,9 +89,7 @@ function generateWorld() {
 function pickOre(depth) {
   let selected = null;
   for (const ore of ORE_TABLE) {
-    if (depth >= ore.from && Math.random() < ore.chance) {
-      selected = ore;
-    }
+    if (depth >= ore.from && Math.random() < ore.chance) selected = ore;
   }
   return selected ? { ...selected } : null;
 }
@@ -117,6 +117,32 @@ function showMessage(text, seconds = 2.2) {
   messageTimer = seconds;
 }
 
+function spawnDebris(x, y, color, count = 6) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 140,
+      vy: -Math.random() * 90,
+      life: 0.35 + Math.random() * 0.45,
+      age: 0,
+      size: 2 + Math.random() * 3,
+      color,
+    });
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.age += dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 220 * dt;
+    if (p.age >= p.life) particles.splice(i, 1);
+  }
+}
+
 function attemptMove(dx, dy, dt) {
   if (gameOver) return;
 
@@ -132,15 +158,12 @@ function attemptMove(dx, dy, dt) {
   const tx = Math.floor(nextX / TILE);
   const ty = Math.floor(nextY / TILE);
   const tile = getTile(tx, ty);
-
   if (!tile) return;
 
   if (tile.type === 'air') {
     player.x = nextX;
     player.y = nextY;
-    if (!isAtSurface()) {
-      consumeFuel(0.14 * dt * 60);
-    }
+    if (!isAtSurface()) consumeFuel(0.14 * dt * 60);
     return;
   }
 
@@ -157,11 +180,16 @@ function attemptMove(dx, dy, dt) {
   miningProgress.set(progressKey, newProgress);
   consumeFuel(0.35 * dt * 60);
 
+  if (frameCounter % 3 === 0) {
+    spawnDebris(tx * TILE + TILE / 2, ty * TILE + TILE / 2, tile.color || '#7e6a5c', 2);
+  }
+
   if (newProgress >= needed) {
     if (tile.type === 'ore') {
       player.cargo.push({ id: tile.id, value: tile.value });
       showMessage(`Добыча: ${tile.id} (+$${tile.value})`, 1.4);
     }
+    spawnDebris(tx * TILE + TILE / 2, ty * TILE + TILE / 2, tile.color || '#7e6a5c', 12);
     setTile(tx, ty, { type: 'air' });
     miningProgress.delete(progressKey);
     player.x = nextX;
@@ -224,6 +252,8 @@ function restartGame() {
 }
 
 function update(dt) {
+  frameCounter += 1;
+
   if (!gameOver) {
     let dx = 0;
     let dy = 0;
@@ -232,21 +262,18 @@ function update(dt) {
     if (controls.up) dy -= 1;
     if (controls.down) dy += 1;
 
-    if (dx || dy) {
-      attemptMove(dx, dy, dt);
-    }
-
+    if (dx || dy) attemptMove(dx, dy, dt);
     refillAtSurface();
   }
+
+  updateParticles(dt);
 
   cameraY = Math.max(0, player.y - CAMERA_PADDING);
   cameraY = Math.min(cameraY, WORLD_ROWS * TILE - canvas.height);
 
   if (messageTimer > 0 && messageTimer < 900) {
     messageTimer -= dt;
-    if (messageTimer <= 0) {
-      ui.message.textContent = '';
-    }
+    if (messageTimer <= 0) ui.message.textContent = '';
   }
 
   syncUi();
@@ -268,24 +295,85 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawSkyAndLayers();
   drawTiles();
+  drawParticles();
   drawMiner();
+  drawLightAndFog();
   drawOverlays();
 }
 
 function drawSkyAndLayers() {
   const skyHeight = SURFACE_ROW * TILE - cameraY;
-  ctx.fillStyle = '#6ab9ff';
+
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, Math.max(1, skyHeight));
+  skyGrad.addColorStop(0, '#84d4ff');
+  skyGrad.addColorStop(1, '#3f8fcf');
+  ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, canvas.width, Math.max(0, skyHeight));
 
-  ctx.fillStyle = '#635244';
+  ctx.fillStyle = '#5d4e43';
   ctx.fillRect(0, Math.max(0, skyHeight), canvas.width, canvas.height);
 
-  ctx.fillStyle = '#3f3229';
+  ctx.fillStyle = '#3f332b';
   ctx.fillRect(0, Math.max(0, skyHeight + TILE), canvas.width, canvas.height);
 
   const surfaceY = SURFACE_ROW * TILE - cameraY;
-  ctx.fillStyle = '#76c94f';
-  ctx.fillRect(0, surfaceY - 6, canvas.width, 12);
+  const grassGrad = ctx.createLinearGradient(0, surfaceY - 7, 0, surfaceY + 7);
+  grassGrad.addColorStop(0, '#91df62');
+  grassGrad.addColorStop(1, '#4f9f2f');
+  ctx.fillStyle = grassGrad;
+  ctx.fillRect(0, surfaceY - 7, canvas.width, 14);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.fillRect(0, surfaceY - 9, canvas.width, 2);
+}
+
+function shadeColor(color, amount) {
+  const c = color.replace('#', '');
+  const num = Number.parseInt(c, 16);
+  const r = Math.max(0, Math.min(255, (num >> 16) + amount));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00ff) + amount));
+  const b = Math.max(0, Math.min(255, (num & 0x0000ff) + amount));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function drawVoxelTile(px, py, baseColor, isOre) {
+  const topInset = 3;
+  const sideInset = 4;
+
+  // top face
+  ctx.fillStyle = shadeColor(baseColor, 22);
+  ctx.beginPath();
+  ctx.moveTo(px + topInset, py + topInset);
+  ctx.lineTo(px + TILE - topInset, py + topInset);
+  ctx.lineTo(px + TILE - sideInset, py + sideInset);
+  ctx.lineTo(px + sideInset, py + sideInset);
+  ctx.closePath();
+  ctx.fill();
+
+  // front face
+  const faceGrad = ctx.createLinearGradient(px, py + sideInset, px, py + TILE);
+  faceGrad.addColorStop(0, shadeColor(baseColor, 4));
+  faceGrad.addColorStop(1, shadeColor(baseColor, -28));
+  ctx.fillStyle = faceGrad;
+  ctx.fillRect(px + sideInset, py + sideInset, TILE - sideInset * 2, TILE - sideInset - 2);
+
+  // right face
+  ctx.fillStyle = shadeColor(baseColor, -36);
+  ctx.beginPath();
+  ctx.moveTo(px + TILE - sideInset, py + sideInset);
+  ctx.lineTo(px + TILE - 1, py + topInset);
+  ctx.lineTo(px + TILE - 1, py + TILE - 2);
+  ctx.lineTo(px + TILE - sideInset, py + TILE - 4);
+  ctx.closePath();
+  ctx.fill();
+
+  if (isOre) {
+    const glow = ctx.createRadialGradient(px + TILE / 2, py + TILE / 2, 1, px + TILE / 2, py + TILE / 2, TILE / 2);
+    glow.addColorStop(0, 'rgba(255,255,255,0.5)');
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
+  }
 }
 
 function drawTiles() {
@@ -299,30 +387,29 @@ function drawTiles() {
 
       const px = x * TILE;
       const py = y * TILE - cameraY;
-
-      ctx.fillStyle = tile.color || '#5b4638';
-      ctx.fillRect(px, py, TILE, TILE);
-
-      if (tile.type === 'ore') {
-        ctx.fillStyle = 'rgba(255,255,255,0.35)';
-        ctx.beginPath();
-        ctx.arc(px + TILE * 0.35, py + TILE * 0.35, 4, 0, Math.PI * 2);
-        ctx.arc(px + TILE * 0.66, py + TILE * 0.6, 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      drawVoxelTile(px, py, tile.color || '#5b4638', tile.type === 'ore');
 
       const key = tileKey(x, y);
       if (miningProgress.has(key)) {
         const p = Math.min(1, miningProgress.get(key) / (tile.hardness * 50));
         ctx.fillStyle = 'rgba(0,0,0,0.45)';
-        ctx.fillRect(px, py + TILE - 5, TILE, 5);
-        ctx.fillStyle = '#80ff9a';
-        ctx.fillRect(px, py + TILE - 5, TILE * p, 5);
+        ctx.fillRect(px + 3, py + TILE - 6, TILE - 6, 4);
+        ctx.fillStyle = '#87ff8f';
+        ctx.fillRect(px + 3, py + TILE - 6, (TILE - 6) * p, 4);
       }
-
-      ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-      ctx.strokeRect(px, py, TILE, TILE);
     }
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const alpha = 1 - p.age / p.life;
+    ctx.fillStyle = p.color.startsWith('#')
+      ? `${shadeColor(p.color, 0).replace('rgb', 'rgba').replace(')', `,${alpha})`)}`
+      : `rgba(210,190,160,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y - cameraY, p.size * alpha, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
@@ -330,29 +417,60 @@ function drawMiner() {
   const px = player.x;
   const py = player.y - cameraY;
 
-  ctx.fillStyle = '#f4b860';
+  const bodyGrad = ctx.createLinearGradient(px - player.w / 2, py, px + player.w / 2, py);
+  bodyGrad.addColorStop(0, '#d28d3d');
+  bodyGrad.addColorStop(0.5, '#f7bf66');
+  bodyGrad.addColorStop(1, '#b8742e');
+
+  ctx.fillStyle = bodyGrad;
   ctx.fillRect(px - player.w / 2, py - player.h / 2, player.w, player.h);
 
-  ctx.fillStyle = '#2b2f3d';
-  ctx.fillRect(px - player.w / 2 - 7, py - 4, 8, 8);
+  ctx.fillStyle = '#2a3040';
+  ctx.fillRect(px - player.w / 2 - 9, py - 5, 10, 10);
 
-  ctx.fillStyle = '#ffd166';
+  const lamp = ctx.createRadialGradient(px + player.w / 2 + 3, py, 1, px + player.w / 2 + 3, py, 6);
+  lamp.addColorStop(0, '#fffce0');
+  lamp.addColorStop(1, '#ffc24a');
+  ctx.fillStyle = lamp;
   ctx.beginPath();
-  ctx.arc(px + player.w / 2 + 3, py, 4, 0, Math.PI * 2);
+  ctx.arc(px + player.w / 2 + 3, py, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(px, py + player.h / 2 + 3, player.w / 2, 4, 0, 0, Math.PI * 2);
   ctx.fill();
 }
 
+function drawLightAndFog() {
+  if (isAtSurface()) return;
+
+  const px = player.x;
+  const py = player.y - cameraY;
+
+  const vignette = ctx.createRadialGradient(px, py, 30, px, py, 280);
+  vignette.addColorStop(0, 'rgba(255,245,210,0)');
+  vignette.addColorStop(0.4, 'rgba(20,24,33,0.15)');
+  vignette.addColorStop(1, 'rgba(12,14,20,0.65)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const depthFactor = Math.min(0.45, Math.max(0, (player.y / TILE - SURFACE_ROW) * 0.005));
+  ctx.fillStyle = `rgba(8,10,18,${depthFactor})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
 function drawOverlays() {
-  if (gameOver) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#ffbbbb';
-    ctx.font = 'bold 34px Inter, sans-serif';
-    ctx.fillText('Топливо закончилось', canvas.width / 2 - 170, canvas.height / 2 - 12);
-    ctx.font = '20px Inter, sans-serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText('Нажмите R для нового заезда', canvas.width / 2 - 145, canvas.height / 2 + 24);
-  }
+  if (!gameOver) return;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#ffbbbb';
+  ctx.font = 'bold 34px Inter, sans-serif';
+  ctx.fillText('Топливо закончилось', canvas.width / 2 - 170, canvas.height / 2 - 12);
+  ctx.font = '20px Inter, sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('Нажмите R для нового заезда', canvas.width / 2 - 145, canvas.height / 2 + 24);
 }
 
 let prev = performance.now();
@@ -365,22 +483,24 @@ function frame(now) {
 }
 
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') controls.left = true;
-  if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') controls.right = true;
-  if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') controls.up = true;
-  if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') controls.down = true;
+  const key = e.key.toLowerCase();
+  if (e.key === 'ArrowLeft' || key === 'a') controls.left = true;
+  if (e.key === 'ArrowRight' || key === 'd') controls.right = true;
+  if (e.key === 'ArrowUp' || key === 'w') controls.up = true;
+  if (e.key === 'ArrowDown' || key === 's') controls.down = true;
 
   if (e.key === '1') tryUpgrade('fuel');
   if (e.key === '2') tryUpgrade('cargo');
   if (e.key === '3') tryUpgrade('drill');
-  if (e.key.toLowerCase() === 'r') restartGame();
+  if (key === 'r') restartGame();
 });
 
 window.addEventListener('keyup', (e) => {
-  if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') controls.left = false;
-  if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') controls.right = false;
-  if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') controls.up = false;
-  if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') controls.down = false;
+  const key = e.key.toLowerCase();
+  if (e.key === 'ArrowLeft' || key === 'a') controls.left = false;
+  if (e.key === 'ArrowRight' || key === 'd') controls.right = false;
+  if (e.key === 'ArrowUp' || key === 'w') controls.up = false;
+  if (e.key === 'ArrowDown' || key === 's') controls.down = false;
 });
 
 syncUi();
